@@ -12,6 +12,10 @@ dynamodb_client = boto3.client('dynamodb')
 
 TABLE_NAME = "test"
 
+HOUR_LIMIT = 6
+
+TAGS_TO_SEARCH = ["Name", "Environment"]
+
 
 def send_email(email_address, body, head):
     '''Sends mail to the given email address with given body and subject line'''
@@ -90,31 +94,34 @@ def get_instance_status():
     instances_status = []
     
     print(all_instances)
+
     
     
-    Status = namedtuple("Status", "instance_id name env launch_time created_by")
+    Status = namedtuple("Status", "instance_id created_by missing_tags")
     for reservations in all_instances["Reservations"]:
         instances = reservations["Instances"]
         for instance in instances:
-            name = None
-            env = None
             if(instance["State"]["Name"] != "running"):
                 continue
             instance_id = instance["InstanceId"]
-            launch_time = instance["LaunchTime"]
             created_by = None
+            missing_tags = set(TAGS_TO_SEARCH)
             for tags in instance["Tags"]:
-                if(tags["Key"] == "Name"):
-                    name = tags["Value"]
-                elif(tags["Key"] == "Environment"):
-                    env = tags["Value"]
-                elif(tags["Key"] == "created_by"):
+                missing_tags.discard(tags["Key"])
+                if(tags["Key"] == "created_by"):
                     created_by = tags["Value"]
-            new_status = Status(instance_id, name, env, launch_time, created_by)
+            new_status = Status(instance_id, created_by, missing_tags)
             instances_status.append(new_status)
             
     return instances_status
     
+
+def generate_body(text, missing_tags, instance_id):
+    '''Generate body for email depending upon the tags missing'''
+    missing_tags = list(missing_tags)
+    return  f"Instances tags {','.join(missing_tags)}  are missing on the EC2 instance {instance_id}. {text} "
+    
+
 
 
 def remove_from_db(table_data):
@@ -137,6 +144,8 @@ def lambda_handler(event, context):
     '''
     create_table()
     instances_status = get_instance_status()
+    if(len(instances_status) == 0):
+        return
     instances_id = {TABLE_NAME:{'Keys':[{'InstanceId':{'S':instance.instance_id}} for instance in instances_status]}}
     print(instances_id)
     response = dynamodb_client.batch_get_item(RequestItems=instances_id)
@@ -147,30 +156,30 @@ def lambda_handler(event, context):
         instance['LastUpdated']['S']) for instance in instance_docs)
     to_be_removed = []
     to_be_added = []
+    print(in_db_instance)
 
     print(in_db_instance)
     current_time = datetime.now()
     to_be_discontinued = []
     for status in instances_status:
-        name = status.name
-        env = status.env
+        missing_tags = status.missing_tags
         created_by = status.created_by
         instance_id = status.instance_id
-        if instance_id not in in_db_instance.keys():
-            to_be_added.append((instance_id, current_time))
-            body = f"Instances tags [{'name' if name is None else ''} {'and' if name is None and env is None else ''} {'Environment' if env is None else ''} ]  are not defined. Please Update as soon as possible to avoid discontinuation "
-            send_email(created_by, body, "Alert EC2 Instance Missing Tag")
-        else:
-            time = in_db_instance[instance_id]
-            emailed_time = datetime.fromisoformat(time)
-            hour_elapsed = (current_time - emailed_time.replace(tzinfo=None)).total_seconds()//3600
-            print(hour_elapsed)
-            if(hour_elapsed >= 6):
-                to_be_removed.append(instance_id)
-                body = "Since last 6 hours the name or environment tag for your ec2 instances were missing, Hence we are discontinuing it."
-                to_be_discontinued.append(instance_id)
-                dynamodb_client.delete_item(TableName=TABLE_NAME, Key={'InstanceId':{'S':instance_id}})
-                send_email(created_by, body, "EC2 instance discontinued")
+        if(len(missing_tags) != 0):
+            if instance_id not in in_db_instance.keys():
+                to_be_added.append((instance_id, current_time))
+                body = generate_body(f"Please Update as soon as possible to avoid discontinuation. The Instance will be terminated automatically after {HOUR_LIMIT} hours",missing_tags, instance_id)
+                send_email(created_by, body, "Alert EC2 Instance Missing Tag")
+            else:
+                time = in_db_instance[instance_id]
+                emailed_time = datetime.fromisoformat(time)
+                hour_elapsed = (current_time - emailed_time.replace(tzinfo=None)).total_seconds()//3600
+                print(hour_elapsed)
+                if(hour_elapsed >= HOUR_LIMIT):
+                    to_be_removed.append(instance_id)
+                    body = generate_body(f"Since Last {HOUR_LIMIT} hours have passed we are discontinuing your instance", missing_tags, instance_id)
+                    to_be_discontinued.append(instance_id)
+                    send_email(created_by, body, "EC2 instance discontinued")
 
     if(len(to_be_removed) > 0):
         remove_from_db(to_be_removed)

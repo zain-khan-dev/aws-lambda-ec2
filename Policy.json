@@ -1,0 +1,43 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "VisualEditor0",
+            "Effect": "Allow",
+            "Action": [
+                "logs:CreateLogStream",
+                "logs:CreateLogGroup",
+                "logs:PutLogEvents"
+            ],
+            "Resource": "arn:aws:logs:*:*:*"
+        },
+        {
+            "Sid": "VisualEditor1",
+            "Effect": "Allow",
+            "Action": [
+                "dynamodb:BatchGetItem",
+                "dynamodb:BatchWriteItem",
+                "ec2:DescribeInstances",
+                "dynamodb:PutItem",
+                "dynamodb:ListTables",
+                "dynamodb:DeleteItem",
+                "ec2:DescribeInstanceAttribute",
+                "ses:SendRawEmail",
+                "dynamodb:Scan",
+                "dynamodb:Query",
+                "dynamodb:UpdateItem",
+                "dynamodb:DeleteTable",
+                "ec2:StopInstances",
+                "dynamodb:CreateTable",
+                "ec2:DescribeInternetGateways",
+                "ses:SendEmail",
+                "ec2:StartInstances",
+                "dynamodb:GetItem",
+                "ec2:DescribeInstanceTypes",
+                "dynamodb:UpdateTable",
+                "ec2:DescribeInstanceStatus"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
