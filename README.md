@@ -12,7 +12,7 @@ If after 6 hours have elapsed after sending an email to the user if tags are sti
 
 ### Services Used
 1. Lambda function
-2. Event Bridge to scheudle lambda to run every hour
+2. Event Bridge to schedule lambda to run every hour
 3. SES for sending email
 4. EC2 instance to manage
 5. DynamoDB to store the last emailed time for each instance id
@@ -30,6 +30,6 @@ If after 6 hours have elapsed after sending an email to the user if tags are sti
 
 3. Add Event Bridge as trigger with rate(1 hour) :- This will run the job every hour
 
-4. Deploy the lambda function with the given code.
+4. Deploy the lambda function with the given code or using deployment.zip.
 
 5. Fine tune the configuration parameters according to the need.
